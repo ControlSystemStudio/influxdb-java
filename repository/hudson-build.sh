@@ -15,7 +15,7 @@ fi
 
 rm -rf ${WORKSPACE}/dot.m2
 export CSS_M2_LOCAL=${WORKSPACE}/dot.m2/repository
-OPTS="-s $MSET clean"
+OPTS="-s $MSET --batch-mode clean"
 
 git clean -Xdf
 
