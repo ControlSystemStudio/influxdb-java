@@ -6,18 +6,14 @@ if [ ! -d "$M2" ]; then
 fi
 PATH=$M2:$PATH
 
-if [ ! -d "$CSS_CI_DIR" ]; then
-    echo "CSS_CI_DIR does not exist: $CSS_CI_DIR"
-    exit 1
-fi
-
-MSET="${CSS_CI_DIR}/csstudio-ci/build-scripts/settings.xml"
+MSET="${WORKSPACE}/repository/settings.xml"
 if [ ! -r $MSET ]
 then
     echo "Missing maven settings"
     exit 1
 fi
 
+rm -rf ${WORKSPACE}/dot.m2
 export CSS_M2_LOCAL=${WORKSPACE}/dot.m2/repository
 OPTS="-s $MSET clean"
 
@@ -29,4 +25,4 @@ mvn $OPTS install || exit 1
 
 cd ${WORKSPACE}/repository
 
-mv $OPTS p2:site || exit 1
+mvn $OPTS p2:site || exit 1

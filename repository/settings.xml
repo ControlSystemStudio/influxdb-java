@@ -1,0 +1,48 @@
+<!-- Maven settings.xml
+  -->
+<settings>
+
+  <mirrors>
+    <mirror>
+      <!--This sends everything else to /public -->
+      <id>nexus</id>
+      <mirrorOf>*</mirrorOf>
+      <url>http://ctrl-ci.sns.gov:8081/nexus/content/groups/public</url>
+    </mirror>
+  </mirrors>
+
+  <localRepository>${env.CSS_M2_LOCAL}</localRepository>
+
+  <profiles>
+    <profile>
+      <id>my-ci-settings</id>
+
+	<!--Enable snapshots for the built in central repo to direct -->
+	<!--all requests to nexus via the mirror -->
+	<!-- URLS are bogus. They will be overridden by the mirror url above -->
+	<repositories>
+          <repository>
+            <id>central</id>
+            <url>http://central</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+          </repository>
+	</repositories>
+	<pluginRepositories>
+          <pluginRepository>
+            <id>central</id>
+            <url>http://central</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+          </pluginRepository>
+	</pluginRepositories>
+
+
+    </profile>
+  </profiles>
+
+  <!-- Enable the above settings -->
+  <activeProfiles>
+    <activeProfile>my-ci-settings</activeProfile>
+  </activeProfiles>
+</settings>
