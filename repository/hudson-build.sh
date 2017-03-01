@@ -19,14 +19,14 @@ then
 fi
 
 export CSS_M2_LOCAL=${WORKSPACE}/dot.m2/repository
-OPTS="-s $MSET"
+OPTS="-s $MSET clean"
 
 git clean -Xdf
 
 cd ${WORKSPACE}
 
-mvn $OPTS || exit 1
+mvn $OPTS install || exit 1
 
 cd ${WORKSPACE}/repository
 
-mv $OPTS || exit 1
+mv $OPTS p2:site || exit 1
