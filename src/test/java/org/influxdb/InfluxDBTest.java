@@ -54,7 +54,6 @@ public class InfluxDBTest {
 			Pong response;
 			try {
 				response = this.influxDB.ping();
-				System.out.println(response);
 				if (!response.getVersion().equalsIgnoreCase("unknown")) {
 					influxDBstarted = true;
 				}
@@ -64,12 +63,9 @@ public class InfluxDBTest {
 			}
 			Thread.sleep(100L);
 		} while (!influxDBstarted);
-		this.influxDB.setLogLevel(LogLevel.FULL);
+		this.influxDB.setLogLevel(LogLevel.NONE);
 		this.influxDB.createDatabase(UDP_DATABASE);
-		// String logs = CharStreams.toString(new InputStreamReader(containerLogsStream,
-		// Charsets.UTF_8));
         System.out.println("################################################################################## ");
-		// System.out.println("Container Logs: \n" + logs);
 		System.out.println("#  Connected to InfluxDB Version: " + this.influxDB.version() + " #");
 		System.out.println("##################################################################################");
 	}
@@ -489,7 +485,7 @@ public class InfluxDBTest {
         InfluxDB influxDBForTestGzip = InfluxDBFactory.connect("http://" + TestUtils.getInfluxIP() + ":" + TestUtils.getInfluxPORT(true), "admin", "admin");
         String dbName = "write_unittest_" + System.currentTimeMillis();
         try {
-            influxDBForTestGzip.setLogLevel(LogLevel.FULL);
+            influxDBForTestGzip.setLogLevel(LogLevel.NONE);
             influxDBForTestGzip.enableGzip();
             influxDBForTestGzip.createDatabase(dbName);
             String rp = TestUtils.defaultRetentionPolicy(this.influxDB.version());
@@ -594,7 +590,7 @@ public class InfluxDBTest {
         String dbName = "write_unittest_" + System.currentTimeMillis();
         this.influxDB.createDatabase(dbName);
         final CountDownLatch countDownLatch = new CountDownLatch(1);
-        Query query = new Query("XXX", dbName);
+        Query query = new Query("UNKNOWN_QUERY", dbName);
         this.influxDB.query(query, 10, new Consumer<QueryResult>() {
             @Override
             public void accept(QueryResult result) {
@@ -623,6 +619,35 @@ public class InfluxDBTest {
                 }
             });
         }
+    }
+
+    @Test
+    public void testFlushPendingWritesWhenBatchingEnabled() {
+        String dbName = "flush_tests_" + System.currentTimeMillis();
+        try {
+            this.influxDB.createDatabase(dbName);
+
+            // Enable batching with a very large buffer and flush interval so writes will be triggered by our call to flush().
+            this.influxDB.enableBatch(Integer.MAX_VALUE, Integer.MAX_VALUE, TimeUnit.HOURS);
+
+            String measurement = TestUtils.getRandomMeasurement();
+            Point point = Point.measurement(measurement).tag("atag", "test").addField("used", 80L).addField("free", 1L).build();
+            this.influxDB.write(dbName, TestUtils.defaultRetentionPolicy(this.influxDB.version()), point);
+            this.influxDB.flush();
+
+            Query query = new Query("SELECT * FROM " + measurement + " GROUP BY *", dbName);
+            QueryResult result = this.influxDB.query(query);
+            Assert.assertFalse(result.getResults().get(0).getSeries().get(0).getTags().isEmpty());
+        } finally {
+            this.influxDB.deleteDatabase(dbName);
+            this.influxDB.disableBatch();
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testFlushThrowsIfBatchingIsNotEnabled() {
+        Assert.assertFalse(this.influxDB.isBatchEnabled());
+        this.influxDB.flush();
     }
 
 }

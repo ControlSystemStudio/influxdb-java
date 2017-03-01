@@ -1,11 +1,12 @@
 target/
 *~
 .classpath
+.m2
 .project
 .settings/
 test-output/
 .idea/
 *iml
 
-.m2
 .DS_Store
+

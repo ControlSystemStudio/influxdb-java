@@ -1,7 +1,6 @@
 package org.influxdb.impl;
 
 
-import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
@@ -41,6 +40,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -177,7 +177,7 @@ public class InfluxDBImpl implements InfluxDB {
   public void disableBatch() {
     this.batchEnabled.set(false);
     if (this.batchProcessor != null) {
-      this.batchProcessor.flush();
+      this.batchProcessor.flushAndShutdown();
       if (this.logLevel != LogLevel.NONE) {
         System.out.println(
             "total writes:" + this.writeCount.get()
@@ -290,7 +290,7 @@ public class InfluxDBImpl implements InfluxDB {
   @Override
   public void write(final int udpPort, final String records) {
     initialDatagramSocket();
-    byte[] bytes = records.getBytes(Charsets.UTF_8);
+    byte[] bytes = records.getBytes(StandardCharsets.UTF_8);
     try {
         datagramSocket.send(new DatagramPacket(bytes, bytes.length, hostAddress, udpPort));
     } catch (IOException e) {
@@ -458,6 +458,17 @@ public class InfluxDBImpl implements InfluxDB {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void flush() {
+    if (!batchEnabled.get()) {
+      throw new IllegalStateException("BatchProcessing is not enabled.");
+    }
+    batchProcessor.flush();
   }
 
   /**
