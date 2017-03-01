@@ -21,7 +21,7 @@ git clean -Xdf
 
 cd ${WORKSPACE}
 
-mvn $OPTS install || exit 1
+mvn $OPTS install -DskipTests=true || exit 1
 
 cd ${WORKSPACE}/repository
 
