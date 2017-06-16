@@ -3,17 +3,16 @@ package org.influxdb.dto;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.NumberFormat;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
-import com.google.common.escape.Escaper;
-import com.google.common.escape.Escapers;
+import org.influxdb.impl.Preconditions;
 
 /**
  * Representation of a InfluxDB database Point.
@@ -28,16 +27,22 @@ public class Point {
   private TimeUnit precision = TimeUnit.NANOSECONDS;
   private Map<String, Object> fields;
 
-  private static final Escaper FIELD_ESCAPER = Escapers.builder()
-                                                      .addEscape('\\', "\\\\")
-                                                      .addEscape('"', "\\\"")
-                                                      .build();
-  private static final Escaper KEY_ESCAPER = Escapers.builder()
-                                                     .addEscape(' ', "\\ ")
-                                                     .addEscape(',', "\\,")
-                                                     .addEscape('=', "\\=")
-                                                     .build();
+  private static final Function<String, String> FIELD_ESCAPER = s ->
+      s.replace("\\", "\\\\").replace("\"", "\\\"");
+  private static final Function<String, String> KEY_ESCAPER = s ->
+      s.replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=");
   private static final int MAX_FRACTION_DIGITS = 340;
+  private static final ThreadLocal<NumberFormat> NUMBER_FORMATTER =
+          ThreadLocal.withInitial(() -> {
+            NumberFormat numberFormat = NumberFormat.getInstance(Locale.ENGLISH);
+            numberFormat.setMaximumFractionDigits(MAX_FRACTION_DIGITS);
+            numberFormat.setGroupingUsed(false);
+            numberFormat.setMinimumFractionDigits(1);
+            return numberFormat;
+          });
+
+  private static final ThreadLocal<Map<String, MeasurementStringBuilder>> CACHED_STRINGBUILDERS =
+          ThreadLocal.withInitial(HashMap::new);
 
   Point() {
   }
@@ -84,8 +89,8 @@ public class Point {
      * @return the Builder instance.
      */
     public Builder tag(final String tagName, final String value) {
-      Preconditions.checkArgument(tagName != null);
-      Preconditions.checkArgument(value != null);
+      Objects.requireNonNull(tagName, "tagName");
+      Objects.requireNonNull(value, "value");
       if (!tagName.isEmpty() && !value.isEmpty()) {
         tags.put(tagName, value);
       }
@@ -121,20 +126,15 @@ public class Point {
       if (value instanceof Number) {
         if (value instanceof Byte) {
           value = ((Byte) value).doubleValue();
-        }
-        if (value instanceof Short) {
+        } else if (value instanceof Short) {
           value = ((Short) value).doubleValue();
-        }
-        if (value instanceof Integer) {
+        } else if (value instanceof Integer) {
           value = ((Integer) value).doubleValue();
-        }
-        if (value instanceof Long) {
+        } else if (value instanceof Long) {
           value = ((Long) value).doubleValue();
-        }
-        if (value instanceof BigInteger) {
+        } else if (value instanceof BigInteger) {
           value = ((BigInteger) value).doubleValue();
         }
-
       }
       fields.put(field, value);
       return this;
@@ -161,9 +161,7 @@ public class Point {
     }
 
     public Builder addField(final String field, final String value) {
-      if (value == null) {
-        throw new IllegalArgumentException("Field value cannot be null");
-      }
+      Objects.requireNonNull(value, "value");
 
       fields.put(field, value);
       return this;
@@ -184,12 +182,12 @@ public class Point {
     /**
      * Add a time to this point.
      *
-     * @param precisionToSet
-     * @param timeToSet
+     * @param timeToSet the time for this point
+     * @param precisionToSet the TimeUnit
      * @return the Builder instance.
      */
     public Builder time(final long timeToSet, final TimeUnit precisionToSet) {
-      Preconditions.checkNotNull(precisionToSet, "Precision must be not null!");
+      Objects.requireNonNull(precisionToSet, "precisionToSet");
       this.time = timeToSet;
       this.precision = precisionToSet;
       return this;
@@ -201,12 +199,8 @@ public class Point {
      * @return the newly created Point.
      */
     public Point build() {
-      Preconditions
-          .checkArgument(!Strings.isNullOrEmpty(this.measurement),
-          "Point name must not be null or empty.");
-      Preconditions
-          .checkArgument(this.fields.size() > 0,
-          "Point must have at least one field specified.");
+      Preconditions.checkNonEmptyString(this.measurement, "measurement");
+      Preconditions.checkPositiveNumber(this.fields.size(), "fields size");
       Point point = new Point();
       point.setFields(this.fields);
       point.setMeasurement(this.measurement);
@@ -320,69 +314,75 @@ public class Point {
    * @return the String without newLine.
    */
   public String lineProtocol() {
-    final StringBuilder sb = new StringBuilder();
-    sb.append(KEY_ESCAPER.escape(this.measurement));
-    sb.append(concatenatedTags());
-    sb.append(concatenateFields());
-    sb.append(formatedTime());
+    final StringBuilder sb = CACHED_STRINGBUILDERS
+            .get()
+            .computeIfAbsent(this.measurement, MeasurementStringBuilder::new)
+            .resetForUse();
+
+    concatenatedTags(sb);
+    concatenatedFields(sb);
+    formatedTime(sb);
+
     return sb.toString();
   }
 
-  private StringBuilder concatenatedTags() {
-    final StringBuilder sb = new StringBuilder();
+  private void concatenatedTags(final StringBuilder sb) {
     for (Entry<String, String> tag : this.tags.entrySet()) {
-      sb.append(",")
-        .append(KEY_ESCAPER.escape(tag.getKey()))
-        .append("=")
-        .append(KEY_ESCAPER.escape(tag.getValue()));
+      sb.append(',')
+        .append(KEY_ESCAPER.apply(tag.getKey()))
+        .append('=')
+        .append(KEY_ESCAPER.apply(tag.getValue()));
     }
-    sb.append(" ");
-    return sb;
+    sb.append(' ');
   }
 
-  private StringBuilder concatenateFields() {
-    final StringBuilder sb = new StringBuilder();
-    final int fieldCount = this.fields.size();
-    int loops = 0;
-
-    NumberFormat numberFormat = NumberFormat.getInstance(Locale.ENGLISH);
-    numberFormat.setMaximumFractionDigits(MAX_FRACTION_DIGITS);
-    numberFormat.setGroupingUsed(false);
-    numberFormat.setMinimumFractionDigits(1);
-
+  private void concatenatedFields(final StringBuilder sb) {
     for (Entry<String, Object> field : this.fields.entrySet()) {
-      loops++;
       Object value = field.getValue();
       if (value == null) {
         continue;
       }
 
-      sb.append(KEY_ESCAPER.escape(field.getKey())).append("=");
-      if (value instanceof String) {
-        String stringValue = (String) value;
-        sb.append("\"").append(FIELD_ESCAPER.escape(stringValue)).append("\"");
-      } else if (value instanceof Number) {
+      sb.append(KEY_ESCAPER.apply(field.getKey())).append('=');
+      if (value instanceof Number) {
         if (value instanceof Double || value instanceof Float || value instanceof BigDecimal) {
-          sb.append(numberFormat.format(value));
+          sb.append(NUMBER_FORMATTER.get().format(value));
         } else {
-          sb.append(value).append("i");
+          sb.append(value).append('i');
         }
+      } else if (value instanceof String) {
+        String stringValue = (String) value;
+        sb.append('"').append(FIELD_ESCAPER.apply(stringValue)).append('"');
       } else {
         sb.append(value);
       }
 
-      if (loops < fieldCount) {
-        sb.append(",");
-      }
+      sb.append(',');
     }
 
-    return sb;
+    // efficiently chop off the trailing comma
+    int lengthMinusOne = sb.length() - 1;
+    if (sb.charAt(lengthMinusOne) == ',') {
+      sb.setLength(lengthMinusOne);
+    }
   }
 
-  private StringBuilder formatedTime() {
-    final StringBuilder sb = new StringBuilder();
-    sb.append(" ").append(TimeUnit.NANOSECONDS.convert(this.time, this.precision));
-    return sb;
+  private void formatedTime(final StringBuilder sb) {
+    sb.append(' ').append(TimeUnit.NANOSECONDS.convert(this.time, this.precision));
   }
 
+  private static class MeasurementStringBuilder {
+    private final StringBuilder sb = new StringBuilder(128);
+    private final int length;
+
+    MeasurementStringBuilder(final String measurement) {
+      this.sb.append(KEY_ESCAPER.apply(measurement));
+      this.length = sb.length();
+    }
+
+    StringBuilder resetForUse() {
+      sb.setLength(length);
+      return sb;
+    }
+  }
 }

@@ -1,17 +1,15 @@
 package org.influxdb.dto;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 import org.influxdb.InfluxDB.ConsistencyLevel;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
+import org.influxdb.impl.Preconditions;
 
 /**
  * {Purpose of This Type}.
@@ -49,8 +47,8 @@ public class BatchPoints {
   public static final class Builder {
     private final String database;
     private String retentionPolicy;
-    private final Map<String, String> tags = Maps.newTreeMap(Ordering.natural());
-    private final List<Point> points = Lists.newArrayList();
+    private final Map<String, String> tags = new TreeMap<>();
+    private final List<Point> points = new ArrayList<>();
     private ConsistencyLevel consistency;
 
     /**
@@ -63,7 +61,7 @@ public class BatchPoints {
     /**
      * The retentionPolicy to use.
      *
-     * @param policy
+     * @param policy the retentionPolicy to use
      * @return the Builder instance
      */
     public Builder retentionPolicy(final String policy) {
@@ -88,7 +86,7 @@ public class BatchPoints {
     /**
      * Add a Point to this set of points.
      *
-     * @param pointToAdd
+     * @param pointToAdd the Point to add
      * @return the Builder instance
      */
     public Builder point(final Point pointToAdd) {
@@ -99,7 +97,7 @@ public class BatchPoints {
     /**
      * Add a set of Points to this set of points.
      *
-     * @param pointsToAdd
+     * @param pointsToAdd the List if Points to add
      * @return the Builder instance
      */
     public Builder points(final Point... pointsToAdd) {
@@ -110,7 +108,7 @@ public class BatchPoints {
     /**
      * Set the ConsistencyLevel to use. If not given it defaults to {@link ConsistencyLevel#ONE}
      *
-     * @param consistencyLevel
+     * @param consistencyLevel the ConsistencyLevel
      * @return the Builder instance
      */
     public Builder consistency(final ConsistencyLevel consistencyLevel) {
@@ -124,8 +122,7 @@ public class BatchPoints {
      * @return the created BatchPoints.
      */
     public BatchPoints build() {
-      Preconditions.checkArgument(!Strings.isNullOrEmpty(this.database),
-                                  "Database must not be null or empty.");
+      Preconditions.checkNonEmptyString(this.database, "database");
       BatchPoints batchPoints = new BatchPoints();
       batchPoints.setDatabase(this.database);
       for (Point point : this.points) {
@@ -190,7 +187,7 @@ public class BatchPoints {
   /**
    * Add a single Point to these batches.
    *
-   * @param point
+   * @param point the Point to add
    * @return this Instance to be able to daisy chain calls.
    */
   public BatchPoints point(final Point point) {

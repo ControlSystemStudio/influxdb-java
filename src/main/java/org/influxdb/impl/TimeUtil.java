@@ -44,7 +44,7 @@ public enum TimeUtil {
   /**
    * Convert from a TimeUnit to a influxDB timeunit String.
    *
-   * @param t
+   * @param t the TimeUnit
    * @return the String representation.
    */
   public static String toTimePrecision(final TimeUnit t) {
@@ -69,7 +69,7 @@ public enum TimeUtil {
     /**
      * convert a unix epoch time to timestamp used by influxdb.
      * this can then be used in query expressions against influxdb's time column like so:
-     * influxDB.query(new Query("SELECT * FROM some_measurement WHERE time >= '"
+     * influxDB.query(new Query("SELECT * FROM some_measurement WHERE time &gt;= '"
      *                          + toInfluxDBTimeFormat(timeStart) + "'", some_database))
      * influxdb time format example: 2016-10-31T06:52:20.020Z
      *
