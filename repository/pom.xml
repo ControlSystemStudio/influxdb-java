@@ -65,7 +65,7 @@
                         <configuration>
                             <artifacts>
                                 <artifact>
-                                    <id>org.influxdb:influxdb-java:2.6-SNAPSHOT</id>
+                                    <id>org.influxdb:influxdb-java:2.7-SNAPSHOT</id>
                                 </artifact>
                             </artifacts>
                         </configuration>
